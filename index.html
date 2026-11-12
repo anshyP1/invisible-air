@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Invisible AIR — Mumbai AQI Dashboard</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+<!-- Leaflet (map) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<!-- Invisible AIR styles -->
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     LOCATION SELECT SCREEN
+══════════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════════════════
+     OPENING SCREEN (presentation only — leads into locality selection)
+══════════════════════════════════════════════════════════════════ -->
+<div id="intro-screen" role="button" tabindex="0" aria-label="Invisible AIR. Click or press Enter to explore your locality">
+  <canvas id="intro-canvas" aria-hidden="true"></canvas>
+  <main class="intro-content">
+    <h1 class="intro-wordmark" id="intro-title"><span class="iw-a">Invisible</span> <span class="iw-b">AIR</span></h1>
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     RIGHT NOW — live estimate (between the opening and the historical data)
+══════════════════════════════════════════════════════════════════ -->
+<section id="lv-screen" class="lv-hidden" aria-labelledby="lv-title">
+  <canvas id="lv-canvas" aria-hidden="true"></canvas>
+  <header class="lv-top">
+    <span class="lv-brand">Invisible <span>AIR</span></span>
+    <span class="lv-pill"><span class="lv-pulse" aria-hidden="true"></span>Live estimate</span>
+  </header>
+  <main class="lv-main">
+    <p class="lv-eyebrow" id="lv-title">Right now in Mindspace, Malad West</p>
+    <div class="lv-reading" aria-live="polite">
+      <div class="lv-value"><span id="lv-aqi">—</span><span class="lv-unit">AQI</span></div>
+      <div class="lv-cat" id="lv-cat"><span class="lv-cat-dot" id="lv-cat-dot"></span><span id="lv-cat-text">Reading the air…</span></div>
+    </div>
+    <dl class="lv-metrics">
+      <div><dt>PM2.5 now</dt><dd><span id="lv-pm25">—</span> <small>µg/m³</small></dd></div>
+      <div><dt>PM10 now</dt><dd><span id="lv-pm10">—</span> <small>µg/m³</small></dd></div>
+      <div><dt>Updated</dt><dd id="lv-time">—</dd></div>
+    </dl>
+    <button class="lv-cta" id="lv-cta" type="button">
+      Explore historical data
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+    <p class="lv-hist">2023–2025 · CPCB AQI and Meteoblue wind data · Mindspace, Malad West</p>
+  </main>
+  <footer class="lv-foot">
+    <span>Historical data: CPCB (AQI) · Meteoblue (wind)</span>
+    <span>Live estimate: India AQI from 24-hour PM2.5 and PM10, Open-Meteo air-quality model (Copernicus CAMS), not an official CPCB reading</span>
+  </footer>
+</section>
+
+<div id="loc-screen" class="hidden">
+
+  <div class="loc-shell">
+
+    <!-- LEFT: MAP -->
+    <div class="loc-map-col">
+      <div id="loc-map"></div>
+      <div class="loc-map-overlay"><span class="dot"></span><span id="loc-map-label">MINDSPACE, MALAD WEST</span></div>
+      <span class="mini-map-credit loc-map-credit">© Esri</span>
+    </div>
+
+    <!-- RIGHT: CONTENT -->
+    <div class="loc-content-col">
+      <h1 class="loc-title">Select Your Locality</h1>
+      <div class="loc-sub">Choose a location to explore historical AQI patterns</div>
+      <div class="loc-source">Historical data: Mindspace, Malad West station · 2023–2025 · CPCB (AQI) · Meteoblue (wind)</div>
+      <div class="loc-grid" id="loc-grid"></div>
+      <!-- confirm row removed; selection is immediate on card click -->
+    </div>
+
+  </div><!-- /loc-shell -->
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     MAIN DASHBOARD
+══════════════════════════════════════════════════════════════════ -->
+<div id="dashboard">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <button class="tb-brand" id="tb-brand" type="button" aria-label="Invisible AIR — back to the opening screen">Invisible <span>AIR</span></button>
+    <div class="tb-sep"></div>
+    <div class="tb-loc">
+      <div class="tb-loc-dot"></div>
+      <span id="tb-loc-name">MINDSPACE, MALAD WEST</span>
+      <span class="tb-loc-city">MUMBAI</span>
+    </div>
+    <div class="tb-sep"></div>
+    <span class="tb-season-label" id="tb-season-label">Season</span>
+    <div class="tb-seasons" role="group" aria-labelledby="tb-season-label">
+      <button class="s-btn active" data-season="all">All Year</button>
+      <button class="s-btn" data-season="winter">Winter</button>
+      <button class="s-btn" data-season="preSummer">Pre-Summer</button>
+      <button class="s-btn" data-season="summer">Summer</button>
+      <button class="s-btn" data-season="monsoon">Monsoon</button>
+      <button class="s-btn" data-season="postMonsoon">Post-Monsoon</button>
+    </div>
+
+    <div class="tb-right">
+      <!-- SEARCH BAR (always-expanded long bar) -->
+      <div class="tb-search-wrap">
+        <div class="tb-search" id="tb-search">
+          <span class="tb-search-icon" id="tb-search-icon" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.65" y2="16.65"/>
+            </svg>
+          </span>
+          <input type="text" id="tb-search-input" placeholder="Search date or month…" autocomplete="off" aria-label="Search by date, month, season or festival"/>
+          <button class="tb-search-clear" id="tb-search-clear" aria-label="Clear search">×</button>
+        </div>
+        <div class="tb-search-result" id="tb-search-result"></div>
+      </div>
+      <div class="tb-year-pill">2023 – 2025</div>
+      <button class="tb-back-btn" id="back-btn" aria-label="Back to localities">← Localities</button>
+    </div>
+  </div>
+
+  <!-- PENDING-LOCALITY NOTICE (shown when a locality without its own data is open) -->
+  <div class="loc-notice" id="loc-notice" role="status" hidden>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor"/></svg>
+    <span><b id="loc-notice-name">Bandra</b> data is coming soon. You're currently viewing <b>Mindspace, Malad West</b> station data (2023–2025).</span>
+  </div>
+
+  <!-- HINT BAR -->
+  <div id="hint-bar">All Months: Jan · Feb · Mar · Apr · May · Jun · Jul · Aug · Sep · Oct · Nov · Dec</div>
+
+  <!-- MAIN ROW -->
+  <div id="main-row">
+
+    <div id="viz-wrap">
+      <!-- Year navigation + comparison (layout only — sits directly beneath the circle) -->
+      <div class="viz-controls">
+        <div class="yr-nav" role="group" aria-label="Year">
+          <button class="yr-arrow" id="yr-prev" type="button" aria-label="Previous year">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="yr-current" id="yr-current" aria-live="polite">2025</span>
+          <button class="yr-arrow" id="yr-next" type="button" aria-label="Next year">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <button class="vc-toggle" id="vc-toggle" type="button" aria-pressed="false">Compare</button>
+        <div class="vc-years" id="vc-years" role="group" aria-label="Years to compare" hidden>
+          <button class="vc-chip" type="button" data-year="2023" aria-pressed="false">2023</button>
+          <button class="vc-chip" type="button" data-year="2024" aria-pressed="false">2024</button>
+          <button class="vc-chip" type="button" data-year="2025" aria-pressed="true">2025</button>
+        </div>
+      </div>
+      <div id="tooltip">
+        <div class="tt-aqi" id="tt-aqi-val">—</div>
+        <div class="tt-label" id="tt-date-val">—</div>
+        <div class="tt-wind" id="tt-wind-val" style="display:none;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
+          <span id="tt-wind-speed">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="dash-panel">
+
+      <!-- IN-PANEL SEARCH RESULT (slides in at top when search is active) -->
+      <div class="panel-search-result" id="panel-search-result" aria-live="polite"></div>
+
+      <!-- DATA STATION MAP (location context for the historical dataset) -->
+      <div class="map-card" id="map-card">
+        <div class="card-title">Data station</div>
+        <div class="mini-map-wrap">
+          <div class="mini-map" id="mini-map" role="img" aria-label="Map of the Mindspace, Malad West monitoring station in Mumbai"></div>
+          <span class="mini-map-credit">© Esri</span>
+        </div>
+        <div class="map-meta">
+          <span class="map-name">Mindspace, Malad West</span>
+          <span class="map-coords" id="mini-map-coords">19.175° N · 72.837° E</span>
+        </div>
+      </div>
+
+      <!-- AQI LEGEND -->
+      <div class="legend-card">
+        <div class="card-title">AQI Legend</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#50c850;--ld-color:#50c850"></div><div class="leg-text"><span class="leg-range">0 – 50</span><span class="leg-cat">Good</span></div></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#90ee90;--ld-color:#90ee90"></div><div class="leg-text"><span class="leg-range">51 – 100</span><span class="leg-cat">Satisfactory</span></div></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#ffe020;--ld-color:#ffe020"></div><div class="leg-text"><span class="leg-range">101 – 200</span><span class="leg-cat">Moderate</span></div></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#ff9620;--ld-color:#ff9620"></div><div class="leg-text"><span class="leg-range">201 – 300</span><span class="leg-cat">Poor</span></div></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#dc3232;--ld-color:#dc3232"></div><div class="leg-text"><span class="leg-range">301 – 400</span><span class="leg-cat">Very Poor</span></div></div>
+        <div class="leg-row"><div class="leg-dot" style="background:#8b0000;--ld-color:#8b0000"></div><div class="leg-text"><span class="leg-range">401 – 500</span><span class="leg-cat">Severe</span></div></div>
+        <div class="leg-scale">
+          <div class="leg-scale-dot"></div>
+          <span class="leg-scale-txt">1 particle = 1 day</span>
+        </div>
+        <p class="leg-source">Data sources: <b>CPCB</b> (AQI) · <b>Meteoblue</b> (wind speed)</p>
+      </div>
+
+      <!-- NEWS CARD -->
+      <div class="news-card" id="news-card">
+        <div class="news-know">Know more about your locality</div>
+        <div class="news-headline" id="news-headline">Festive season turns hazardous as Mumbai records worst air quality of 2025</div>
+        <span class="news-source" id="news-source">· The Hindu</span>
+        <a class="news-link" id="news-link" href="#" target="_blank" rel="noopener">View full article ↗</a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- BOTTOM INSIGHTS BAR -->
+  <div id="insights-bar">
+    <div class="ins-block">
+      <div class="ins-label">Highest AQI</div>
+      <div class="ins-value" id="ins-high">—</div>
+      <div class="ins-sub" id="ins-high-date">–</div>
+    </div>
+    <div class="ins-block">
+      <div class="ins-label">Lowest AQI</div>
+      <div class="ins-value" id="ins-low">—</div>
+      <div class="ins-sub" id="ins-low-date">–</div>
+    </div>
+    <div class="ins-block">
+      <div class="ins-label">Seasonal Average</div>
+      <div class="ins-value" id="ins-avg">—</div>
+      <div class="ins-sub" id="ins-avg-lbl">All Years</div>
+    </div>
+    <div class="ins-caption" id="ins-caption">
+      "Air made visible — pollution expressed through motion and atmosphere."
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="js/script.js"></script>
+</body>
+</html>
